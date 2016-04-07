@@ -1,0 +1,509 @@
+#include "nautilus-view-icon-controller.h"
+#include "nautilus-view-icon-ui.h"
+#include "nautilus-view-item-model.h"
+#include "nautilus-files-view.h"
+#include "nautilus-file.h"
+#include "nautilus-window-slot.h"
+#include "nautilus-directory.h"
+#include "nautilus-global-preferences.h"
+
+struct _NautilusViewIconController
+{
+    NautilusFilesView parent_instance;
+
+    NautilusViewIconUi *view_ui;
+    GListModel *model;
+
+    GtkWidget *view_icon;
+    GActionGroup *action_group;
+    gint zoom_level;
+};
+
+G_DEFINE_TYPE (NautilusViewIconController, nautilus_view_icon_controller, NAUTILUS_TYPE_FILES_VIEW)
+
+enum {
+  PROP_0,
+  N_PROPS
+};
+
+static gint
+get_default_zoom_level ()
+{
+    NautilusCanvasZoomLevel default_zoom_level;
+
+    default_zoom_level = g_settings_get_enum (nautilus_icon_view_preferences,
+                                              NAUTILUS_PREFERENCES_ICON_VIEW_DEFAULT_ZOOM_LEVEL);
+
+    return NAUTILUS_CANVAS_ZOOM_LEVEL_LARGE;
+}
+
+static void
+set_sort_order_from_metadata_and_preferences (NautilusViewIconController *self)
+{
+
+}
+
+static void
+real_begin_loading (NautilusFilesView *files_view)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+
+    set_sort_order_from_metadata_and_preferences (self);
+}
+
+static void
+real_clear (NautilusFilesView *files_view)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+
+    g_list_store_remove_all (G_LIST_STORE (self->model));
+}
+
+
+static void
+real_file_changed (NautilusFilesView *files_view,
+                   NautilusFile      *file,
+                   NautilusDirectory *directory)
+{
+}
+
+static GList *
+real_get_selection (NautilusFilesView *files_view)
+{
+    return NULL;
+}
+
+
+static GList *
+real_get_selection_for_file_transfer (NautilusFilesView *files_view)
+{
+    return NULL;
+}
+
+static gboolean
+real_is_empty (NautilusFilesView *files_view)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+
+    return g_list_model_get_n_items (self->model) == 0;
+}
+
+static void
+real_end_file_changes (NautilusFilesView *files_view)
+{
+}
+
+static void
+real_remove_file (NautilusFilesView *files_view,
+                  NautilusFile      *file,
+                  NautilusDirectory *directory)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+    NautilusFile *current_file;
+    NautilusViewItemModel *current_item_model;
+    guint i = 0;
+
+    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (self->model, i))))
+    {
+        current_file = nautilus_view_item_model_get_file (current_item_model);
+        if (current_file == file)
+        {
+            g_list_store_remove (G_LIST_STORE (self->model), i);
+            break;
+        }
+        i++;
+    }
+}
+
+static void
+real_set_selection (NautilusFilesView *files_view,
+                    GList             *selection)
+{
+    nautilus_files_view_notify_selection_changed (files_view);
+}
+
+static void
+real_select_all (NautilusFilesView *files_view)
+{
+}
+
+static void
+real_reveal_selection (NautilusFilesView *files_view)
+{
+}
+
+static void
+real_update_actions_state (NautilusFilesView *files_view)
+{
+    NAUTILUS_FILES_VIEW_CLASS (nautilus_view_icon_controller_parent_class)->update_actions_state (files_view);
+}
+
+static void
+real_bump_zoom_level (NautilusFilesView *files_view,
+                      int                zoom_increment)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+    NautilusCanvasZoomLevel new_level;
+
+    new_level = self->zoom_level + zoom_increment;
+
+    if (new_level >= NAUTILUS_CANVAS_ZOOM_LEVEL_SMALL &&
+        new_level <= NAUTILUS_CANVAS_ZOOM_LEVEL_LARGER)
+    {
+        g_action_group_change_action_state (self->action_group,
+                                            "zoom-to-level",
+                                            g_variant_new_int32 (new_level));
+    }
+}
+
+static guint
+real_get_zoom_level (NautilusFilesView *files_view)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+
+    return self->zoom_level;
+}
+
+static guint
+get_icon_size_for_zoom_level (NautilusCanvasZoomLevel zoom_level)
+{
+    switch (zoom_level)
+    {
+        case NAUTILUS_CANVAS_ZOOM_LEVEL_SMALL:
+        {
+            return NAUTILUS_CANVAS_ICON_SIZE_SMALL;
+        }
+        break;
+
+        case NAUTILUS_CANVAS_ZOOM_LEVEL_STANDARD:
+        {
+            return NAUTILUS_CANVAS_ICON_SIZE_STANDARD;
+        }
+        break;
+
+        case NAUTILUS_CANVAS_ZOOM_LEVEL_LARGE:
+        {
+            return NAUTILUS_CANVAS_ICON_SIZE_LARGE;
+        }
+        break;
+
+        case NAUTILUS_CANVAS_ZOOM_LEVEL_LARGER:
+        {
+            return NAUTILUS_CANVAS_ICON_SIZE_LARGER;
+        }
+        break;
+    }
+    g_return_val_if_reached (NAUTILUS_CANVAS_ICON_SIZE_STANDARD);
+}
+
+static void
+set_icon_size (NautilusViewIconController *self,
+               gint                        icon_size)
+{
+    NautilusViewItemModel *current_item_model;
+    guint i = 0;
+
+    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (self->model, i))))
+    {
+        nautilus_view_item_model_set_icon_size (current_item_model,
+                                                get_icon_size_for_zoom_level (self->zoom_level));
+        i++;
+    }
+}
+
+static void
+set_zoom_level (NautilusViewIconController *self,
+                guint                       new_level)
+{
+    self->zoom_level = new_level;
+
+    set_icon_size (self, get_icon_size_for_zoom_level (new_level));
+}
+static void
+real_zoom_to_level (NautilusFilesView *files_view,
+                    guint              new_level)
+{
+}
+
+static void
+real_restore_standard_zoom_level (NautilusFilesView *files_view)
+{
+}
+
+static gfloat
+real_get_zoom_level_percentage (NautilusFilesView *files_view)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+
+    return (gfloat) get_icon_size_for_zoom_level (self->zoom_level) /
+           NAUTILUS_CANVAS_ICON_SIZE_LARGE;
+}
+
+static gboolean
+real_can_zoom_in (NautilusFilesView *files_view)
+{
+    return TRUE;
+}
+
+static gboolean
+real_can_zoom_out (NautilusFilesView *files_view)
+{
+    return TRUE;
+}
+
+static void
+real_click_policy_changed (NautilusFilesView *files_view)
+{
+}
+
+static int
+real_compare_files (NautilusFilesView *files_view,
+                    NautilusFile      *file1,
+                    NautilusFile      *file2)
+{
+    if (file1 < file2)
+    {
+        return -1;
+    }
+
+    if (file1 > file2)
+    {
+        return +1;
+    }
+
+    return 0;
+}
+
+static gboolean
+real_using_manual_layout (NautilusFilesView *files_view)
+{
+    return FALSE;
+}
+
+static void
+real_end_loading (NautilusFilesView *files_view,
+                  gboolean           all_files_seen)
+{
+}
+
+static char *
+real_get_first_visible_file (NautilusFilesView *files_view)
+{
+    return NULL;
+}
+
+static void
+real_scroll_to_file (NautilusFilesView *files_view,
+                     const char        *uri)
+{
+}
+
+static void
+real_sort_directories_first_changed (NautilusFilesView *files_view)
+{
+}
+
+static gpointer *
+convert_file_glist_to_item_model_array (NautilusViewIconController *self,
+                                        GList                      *list)
+{
+    gpointer *array;
+    GList *l;
+    int i = 0;
+
+    g_return_val_if_fail (list != NULL, NULL);
+
+    array = g_malloc_n (sizeof (NautilusViewItemModel *), g_list_length (list));
+
+    for (l = list; l != NULL; l = l->next, i++)
+    {
+        array[i] = nautilus_view_item_model_new (NAUTILUS_FILE (l->data),
+                                                 get_icon_size_for_zoom_level (self->zoom_level));
+    }
+
+    return array;
+}
+
+static void
+real_add_files (NautilusFilesView *files_view,
+                GList             *files,
+                NautilusDirectory *directory)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+    g_autofree gpointer *array = NULL;
+
+    clock_t start = clock ();
+
+    g_print ("add files %d\n", g_list_length (files));
+    array = convert_file_glist_to_item_model_array (self, files);
+    g_list_store_splice (G_LIST_STORE (self->model),
+                         g_list_model_get_n_items (self->model),
+                         0, array, g_list_length (files));
+    clock_t end = clock ();
+    double elapsed_time = (end - start) / (double) CLOCKS_PER_SEC;
+    g_print ("add file finished %d %f\n", g_list_model_get_n_items (self->model), elapsed_time);
+}
+
+
+static guint
+real_get_view_id (NautilusFilesView *files_view)
+{
+    return NAUTILUS_VIEW_GRID_ID;
+}
+
+static GIcon *
+real_get_icon (NautilusFilesView *files_view)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+
+    return self->view_icon;
+}
+
+static void
+real_select_first (NautilusFilesView *files_view)
+{
+}
+
+static void
+action_zoom_to_level (GSimpleAction *action,
+                      GVariant      *state,
+                      gpointer       user_data)
+{
+    NautilusViewIconUi *self = NAUTILUS_VIEW_ICON_CONTROLLER (user_data);
+
+    set_zoom_level (self, g_variant_get_int32 (state));
+    g_simple_action_set_state (G_SIMPLE_ACTION (action), state);
+}
+
+static void
+finalize (GObject *object)
+{
+  NautilusViewIconController *self = (NautilusViewIconController *)object;
+
+  G_OBJECT_CLASS (nautilus_view_icon_controller_parent_class)->finalize (object);
+}
+
+static void
+get_property (GObject    *object,
+              guint       prop_id,
+              GValue     *value,
+              GParamSpec *pspec)
+{
+  NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (object);
+
+  switch (prop_id)
+    {
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+set_property (GObject      *object,
+              guint         prop_id,
+              const GValue *value,
+              GParamSpec   *pspec)
+{
+  NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (object);
+
+  switch (prop_id)
+    {
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+const GActionEntry view_icon_ui_entries[] =
+{
+    { "zoom-to-level", NULL, NULL, "3", action_zoom_to_level }
+};
+
+static void
+constructed (GObject *object)
+{
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (object);
+    GtkWidget *content_widget;
+
+    self->model = g_list_store_new (NAUTILUS_TYPE_VIEW_ITEM_MODEL);
+    self->view_ui = nautilus_view_icon_ui_new (self);
+    gtk_widget_show (GTK_WIDGET (self->view_ui));
+    self->view_icon = g_themed_icon_new ("view-grid-symbolic");
+
+    content_widget = nautilus_files_view_get_content_widget (NAUTILUS_FILES_VIEW (self));
+    gtk_container_add (GTK_CONTAINER (content_widget), GTK_WIDGET (self->view_ui));
+
+    self->action_group = nautilus_files_view_get_action_group (NAUTILUS_FILES_VIEW (self));
+    g_action_map_add_action_entries (G_ACTION_MAP (self->action_group),
+                                     view_icon_ui_entries,
+                                     G_N_ELEMENTS (view_icon_ui_entries),
+                                     self);
+    self->zoom_level = get_default_zoom_level ();
+    g_action_group_change_action_state (self->action_group,
+                                        "zoom-to-level",
+                                        g_variant_new_int32 (self->zoom_level));
+
+    gtk_widget_show_all (self);
+}
+
+static void
+nautilus_view_icon_controller_class_init (NautilusViewIconControllerClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  NautilusFilesViewClass *files_view_class = NAUTILUS_FILES_VIEW_CLASS (klass);
+
+  object_class->finalize = finalize;
+  object_class->get_property = get_property;
+  object_class->set_property = set_property;
+  object_class->constructed = constructed;
+
+    files_view_class->add_files = real_add_files;
+    files_view_class->begin_loading = real_begin_loading;
+    files_view_class->bump_zoom_level = real_bump_zoom_level;
+    files_view_class->can_zoom_in = real_can_zoom_in;
+    files_view_class->can_zoom_out = real_can_zoom_out;
+    files_view_class->click_policy_changed = real_click_policy_changed;
+    files_view_class->clear = real_clear;
+    files_view_class->file_changed = real_file_changed;
+    files_view_class->get_selection = real_get_selection;
+    files_view_class->get_selection_for_file_transfer = real_get_selection_for_file_transfer;
+    files_view_class->is_empty = real_is_empty;
+    files_view_class->remove_file = real_remove_file;
+    files_view_class->update_actions_state = real_update_actions_state;
+    files_view_class->reveal_selection = real_reveal_selection;
+    files_view_class->select_all = real_select_all;
+    files_view_class->set_selection = real_set_selection;
+    files_view_class->compare_files = real_compare_files;
+    files_view_class->sort_directories_first_changed = real_sort_directories_first_changed;
+    files_view_class->end_file_changes = real_end_file_changes;
+    files_view_class->using_manual_layout = real_using_manual_layout;
+    files_view_class->end_loading = real_end_loading;
+    files_view_class->get_view_id = real_get_view_id;
+    files_view_class->get_first_visible_file = real_get_first_visible_file;
+    files_view_class->scroll_to_file = real_scroll_to_file;
+    files_view_class->get_icon = real_get_icon;
+    files_view_class->select_first = real_select_first;
+    files_view_class->restore_standard_zoom_level = real_restore_standard_zoom_level;
+    files_view_class->get_zoom_level_percentage = real_get_zoom_level_percentage;
+}
+
+static void
+nautilus_view_icon_controller_init (NautilusViewIconController *self)
+{
+}
+
+NautilusViewIconController *
+nautilus_view_icon_controller_new (NautilusWindowSlot *slot)
+{
+  return g_object_new (NAUTILUS_TYPE_VIEW_ICON_CONTROLLER,
+                       "window-slot", slot,
+                       NULL);
+}
+
+GListModel *
+nautilus_view_icon_controller_get_model (NautilusViewIconController *self)
+{
+    g_return_val_if_fail (NAUTILUS_IS_VIEW_ICON_CONTROLLER (self), NULL);
+
+    return self->model;
+}
+
