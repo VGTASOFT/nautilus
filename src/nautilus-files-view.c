@@ -7710,8 +7710,10 @@ nautilus_files_view_reset_view_menu (NautilusFilesView *view)
     gboolean show_sort_trash, show_sort_access, show_sort_modification, sort_available;
     const gchar *hint;
     g_autofree gchar *zoom_level_percent = NULL;
+    NautilusFile *file;
 
     view_action_group = nautilus_files_view_get_action_group (view);
+    file = nautilus_files_view_get_directory_as_file (NAUTILUS_FILES_VIEW (view));
 
     gtk_widget_set_visible (view->details->visible_columns,
                             g_action_group_has_action (view_action_group, "visible-columns"));
@@ -7719,6 +7721,8 @@ nautilus_files_view_reset_view_menu (NautilusFilesView *view)
     sort_available = g_action_group_get_action_enabled (view_action_group, "sort");
     show_sort_trash = show_sort_modification = show_sort_access = FALSE;
     gtk_widget_set_visible (view->details->sort_menu, sort_available);
+    gtk_widget_set_visible (view->details->sort_trash_time,
+                            nautilus_file_is_in_trash (file));
 
     /* We want to make insensitive available actions but that are not current
      * available due to the directory
@@ -7727,24 +7731,6 @@ nautilus_files_view_reset_view_menu (NautilusFilesView *view)
                               !nautilus_files_view_is_empty (view));
     gtk_widget_set_sensitive (view->details->zoom_controls_box,
                               !nautilus_files_view_is_empty (view));
-
-    if (sort_available)
-    {
-        variant = g_action_group_get_action_state_hint (view_action_group, "sort");
-        g_variant_iter_init (&iter, variant);
-
-        while (g_variant_iter_next (&iter, "&s", &hint))
-        {
-            if (g_strcmp0 (hint, "trash-time") == 0)
-            {
-                show_sort_trash = TRUE;
-            }
-        }
-
-        g_variant_unref (variant);
-    }
-
-    gtk_widget_set_visible (view->details->sort_trash_time, show_sort_trash);
 
     zoom_level_percent = g_strdup_printf ("%.0f%%", nautilus_files_view_get_zoom_level_percentage (view) * 100.0);
     gtk_label_set_label (GTK_LABEL (view->details->zoom_level_label), zoom_level_percent);
@@ -9284,7 +9270,7 @@ nautilus_files_view_new (guint               id,
     {
         case NAUTILUS_VIEW_GRID_ID:
         {
-            view = nautilus_view_icon_controller_new (slot);
+            view = NAUTILUS_FILES_VIEW (nautilus_view_icon_controller_new (slot));
         }
         break;
 

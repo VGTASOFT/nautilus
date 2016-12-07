@@ -128,7 +128,7 @@ nautilus_view_item_model_new (NautilusFile *file,
 guint
 nautilus_view_item_model_get_icon_size (NautilusViewItemModel *self)
 {
-    g_return_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self));
+    g_return_val_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self), -1);
 
     return self->icon_size;
 }
@@ -147,7 +147,7 @@ nautilus_view_item_model_set_icon_size (NautilusViewItemModel *self,
 NautilusFile *
 nautilus_view_item_model_get_file (NautilusViewItemModel *self)
 {
-    g_return_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self));
+    g_return_val_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self), NULL);
 
     return self->file;
 }

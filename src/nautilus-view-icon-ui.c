@@ -105,7 +105,7 @@ create_widget_func (gpointer item,
     NautilusViewIconItemUi *child;
 
     child = nautilus_view_icon_item_ui_new (item_model);
-    gtk_widget_show (child);
+    gtk_widget_show (GTK_WIDGET (child));
 
     return GTK_WIDGET (child);
 }
@@ -120,7 +120,7 @@ on_child_activated (GtkFlowBox      *flow_box,
     NautilusFile *file;
     g_autoptr (GList) list = NULL;
 
-    item_model = nautilus_view_icon_item_ui_get_model (child);
+    item_model = nautilus_view_icon_item_ui_get_model (NAUTILUS_VIEW_ICON_ITEM_UI (child));
     file = nautilus_view_item_model_get_file (item_model);
     list = g_list_append (list, file);
 
@@ -137,6 +137,7 @@ static void
 constructed (GObject *object)
 {
     NautilusViewIconUi *self = NAUTILUS_VIEW_ICON_UI (object);
+    GListStore *model;
 
     G_OBJECT_CLASS (nautilus_view_icon_ui_parent_class)->constructed (object);
 
@@ -152,8 +153,9 @@ constructed (GObject *object)
     gtk_widget_set_margin_bottom (GTK_WIDGET (self), 10);
     gtk_widget_set_margin_end (GTK_WIDGET (self), 10);
 
+    model = nautilus_view_icon_controller_get_model (self->controller);
     gtk_flow_box_bind_model (GTK_FLOW_BOX (self),
-                             nautilus_view_icon_controller_get_model (self->controller),
+                             G_LIST_MODEL (model),
                              create_widget_func, self, NULL);
 
     g_signal_connect (self, "child-activated", (GCallback) on_child_activated, self);

@@ -15,7 +15,7 @@ G_DECLARE_FINAL_TYPE (NautilusViewIconController, nautilus_view_icon_controller,
 
 NautilusViewIconController *nautilus_view_icon_controller_new (NautilusWindowSlot *slot);
 
-GListModel * nautilus_view_icon_controller_get_model (NautilusViewIconController *self);
+GListStore * nautilus_view_icon_controller_get_model (NautilusViewIconController *self);
 
 G_END_DECLS
 

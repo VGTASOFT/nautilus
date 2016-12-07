@@ -222,6 +222,8 @@ nautilus_no_main_sources = \
 	nautilus-view-icon-ui.h			\
 	nautilus-view-item-model.c		\
 	nautilus-view-item-model.h		\
+	nautilus-view-model.c			\
+	nautilus-view-model.h			\
 	nautilus-window-slot.c			\
 	nautilus-window-slot.h			\
 	nautilus-window-slot-dnd.c		\
