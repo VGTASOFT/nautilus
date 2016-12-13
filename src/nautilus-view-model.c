@@ -4,10 +4,12 @@
 
 struct _NautilusViewModel
 {
-  Gobject parent_instance;
+  GObject parent_instance;
 
   GListStore *internal_model;
-  NautilusViewModelSortData *sort_data;
+  NautilusFileSortType sort_type;
+  gboolean reverse;
+  gboolean directories_first;
 };
 
 G_DEFINE_TYPE (NautilusViewModel, nautilus_view_model, G_TYPE_OBJECT)
@@ -37,7 +39,7 @@ get_property (GObject    *object,
     {
         case PROP_SORT_TYPE:
         {
-            g_value_set_object (value, self->sort_type);
+            g_value_set_enum (value, self->sort_type);
         }
         break;
 
@@ -112,13 +114,13 @@ compare_data_func (gconstpointer a,
     NautilusFile *file_a;
     NautilusFile *file_b;
 
-    file_a = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL (a));
-    file_b = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL (a));
+    file_a = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL ((gpointer) a));
+    file_b = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL ((gpointer) a));
 
     return nautilus_file_compare_for_sort (file_a, file_b,
-                                           self->sort_data->sort_type,
-                                           self->sort_data->sort_reversed,
-                                           self->sort_data->sort_directories_first);
+                                           self->sort_type,
+                                           self->reversed,
+                                           self->directories_first);
 }
 
 NautilusViewModel *
@@ -129,7 +131,7 @@ nautilus_view_model_new ()
 
 void
 nautilus_view_model_set_sort_type (NautilusViewModel         *self,
-                                   NautilusViewModelSortData *sort_data);
+                                   NautilusViewModelSortData *sort_data)
 {
     if (self->sort_data)
     {
@@ -142,4 +144,10 @@ nautilus_view_model_set_sort_type (NautilusViewModel         *self,
     self->sort_data->directories_first = sort_data->directories_first;
 
     g_list_store_sort (self, compare_data_func, self);
+}
+
+GListStore *
+nautilus_view_model_get_g_model (NautilusViewModel *self)
+{
+    return self->internal_model;
 }

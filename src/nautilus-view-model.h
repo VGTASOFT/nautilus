@@ -22,6 +22,8 @@ NautilusViewModel * nautilus_view_model_new (void);
 void nautilus_view_model_set_sort_type (NautilusViewModel         *self,
                                         NautilusViewModelSortData *sort_data);
 
+GListStore * nautilus_view_model_get_g_model (NautilusViewModel *self);
+
 G_END_DECLS
 
 #endif /* NAUTILUS_VIEW_MODEL_H */

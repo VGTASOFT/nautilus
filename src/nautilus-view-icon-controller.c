@@ -99,7 +99,7 @@ real_remove_file (NautilusFilesView *files_view,
     NautilusViewItemModel *current_item_model;
     guint i = 0;
 
-    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (self->model, i))))
+    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (nautilus_view_model_get_g_model (self->model), i))))
     {
         current_file = nautilus_view_item_model_get_file (current_item_model);
         if (current_file == file)
@@ -379,7 +379,7 @@ static const SortConstants sorts_constants[] =
     }
 };
 
-static SortConstants *
+static SortConstants
 get_sort_constants_from_action_target_name (const gchar *action_target_name)
 {
     int i;
@@ -400,15 +400,15 @@ action_sort_order_changed (GSimpleAction *action,
                            gpointer       user_data)
 {
     const gchar *target_name;
-    SortConstants *sort_constants;
+    SortConstants sort_constants;
     NautilusViewModelSortData sort_data;
+    NautilusViewIconController *self;
 
-    g_assert (NAUTILUS_IS_CANVAS_VIEW (user_data));
-
+    self = NAUTILUS_VIEW_ICON_CONTROLLER (user_data);
     target_name = g_variant_get_string (value, NULL);
     sort_constants = get_sort_constants_from_action_target_name (target_name);
     sort_data.sort_type = sort_constants.sort_type;
-    sort_data.reverse = sort_constants.reverse;
+    sort_data.reversed = sort_constants.reversed;
     sort_data.directories_first = nautilus_files_view_should_sort_directories_first (NAUTILUS_FILES_VIEW (self));
 
     nautilus_view_model_set_sort_type (self->model, &sort_data);
@@ -510,6 +510,7 @@ constructed (GObject *object)
                                      view_icon_actions,
                                      G_N_ELEMENTS (view_icon_actions),
                                      self);
+    self->zoom_level = get_default_zoom_level (self);
     /* Keep the action synced with the actual value, so the toolbar can poll it */
     g_action_group_change_action_state (nautilus_files_view_get_action_group (NAUTILUS_FILES_VIEW (self)),
                                         "zoom-to-level", g_variant_new_int32 (self->zoom_level));
@@ -574,4 +575,3 @@ nautilus_view_icon_controller_get_model (NautilusViewIconController *self)
 
     return self->model;
 }
-
