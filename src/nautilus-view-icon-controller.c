@@ -52,7 +52,7 @@ real_clear (NautilusFilesView *files_view)
 {
     NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
 
-    g_list_store_remove_all (G_LIST_STORE (self->model));
+    g_list_store_remove_all (nautilus_view_model_get_g_model (self->model));
 }
 
 
@@ -81,7 +81,7 @@ real_is_empty (NautilusFilesView *files_view)
 {
     NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
 
-    return g_list_model_get_n_items (G_LIST_MODEL (self->model)) == 0;
+    return g_list_model_get_n_items (G_LIST_MODEL (nautilus_view_model_get_g_model (self->model))) == 0;
 }
 
 static void
@@ -99,12 +99,12 @@ real_remove_file (NautilusFilesView *files_view,
     NautilusViewItemModel *current_item_model;
     guint i = 0;
 
-    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (nautilus_view_model_get_g_model (self->model), i))))
+    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (G_LIST_MODEL (nautilus_view_model_get_g_model (self->model)), i))))
     {
         current_file = nautilus_view_item_model_get_file (current_item_model);
         if (current_file == file)
         {
-            g_list_store_remove (G_LIST_STORE (self->model), i);
+            g_list_store_remove (nautilus_view_model_get_g_model (self->model), i);
             break;
         }
         i++;
@@ -191,7 +191,7 @@ set_icon_size (NautilusViewIconController *self,
     NautilusViewItemModel *current_item_model;
     guint i = 0;
 
-    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (G_LIST_MODEL (self->model), i))))
+    while ((current_item_model = NAUTILUS_VIEW_ITEM_MODEL (g_list_model_get_item (G_LIST_MODEL (nautilus_view_model_get_g_model (self->model)), i))))
     {
         nautilus_view_item_model_set_icon_size (current_item_model,
                                                 get_icon_size_for_zoom_level (self->zoom_level));
@@ -379,7 +379,7 @@ static const SortConstants sorts_constants[] =
     }
 };
 
-static SortConstants
+static SortConstants *
 get_sort_constants_from_action_target_name (const gchar *action_target_name)
 {
     int i;
@@ -388,11 +388,11 @@ get_sort_constants_from_action_target_name (const gchar *action_target_name)
     {
         if (g_strcmp0 (sorts_constants[i].action_target_name, action_target_name) == 0)
         {
-             return sorts_constants[i];
+             return &sorts_constants[i];
         }
     }
 
-    return sorts_constants[0];
+    return &sorts_constants[0];
 }
 static void
 action_sort_order_changed (GSimpleAction *action,
@@ -400,15 +400,15 @@ action_sort_order_changed (GSimpleAction *action,
                            gpointer       user_data)
 {
     const gchar *target_name;
-    SortConstants sort_constants;
+    SortConstants *sort_constants;
     NautilusViewModelSortData sort_data;
     NautilusViewIconController *self;
 
     self = NAUTILUS_VIEW_ICON_CONTROLLER (user_data);
     target_name = g_variant_get_string (value, NULL);
     sort_constants = get_sort_constants_from_action_target_name (target_name);
-    sort_data.sort_type = sort_constants.sort_type;
-    sort_data.reversed = sort_constants.reversed;
+    sort_data.sort_type = sort_constants->sort_type;
+    sort_data.reversed = sort_constants->reversed;
     sort_data.directories_first = nautilus_files_view_should_sort_directories_first (NAUTILUS_FILES_VIEW (self));
 
     nautilus_view_model_set_sort_type (self->model, &sort_data);
@@ -428,13 +428,13 @@ real_add_files (NautilusFilesView *files_view,
 
     g_print ("add files %d\n", g_list_length (files));
     array = convert_file_glist_to_item_model_array (self, files);
-    g_list_store_splice (G_LIST_STORE (self->model),
-                         g_list_model_get_n_items (G_LIST_MODEL (self->model)),
+    g_list_store_splice (nautilus_view_model_get_g_model (self->model),
+                         g_list_model_get_n_items (G_LIST_MODEL (nautilus_view_model_get_g_model (self->model))),
                          0, array, g_list_length (files));
     clock_t end = clock ();
     double elapsed_time = (end - start) / (double) CLOCKS_PER_SEC;
     g_print ("add file finished %d %f\n",
-             g_list_model_get_n_items (G_LIST_MODEL (self->model)),
+             g_list_model_get_n_items (G_LIST_MODEL (nautilus_view_model_get_g_model (self->model))),
              elapsed_time);
 }
 
@@ -573,5 +573,5 @@ nautilus_view_icon_controller_get_model (NautilusViewIconController *self)
 {
     g_return_val_if_fail (NAUTILUS_IS_VIEW_ICON_CONTROLLER (self), NULL);
 
-    return self->model;
+    return nautilus_view_model_get_g_model (self->model);
 }

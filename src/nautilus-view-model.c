@@ -7,9 +7,7 @@ struct _NautilusViewModel
   GObject parent_instance;
 
   GListStore *internal_model;
-  NautilusFileSortType sort_type;
-  gboolean reverse;
-  gboolean directories_first;
+  NautilusViewModelSortData *sort_data;
 };
 
 G_DEFINE_TYPE (NautilusViewModel, nautilus_view_model, G_TYPE_OBJECT)
@@ -39,7 +37,7 @@ get_property (GObject    *object,
     {
         case PROP_SORT_TYPE:
         {
-            g_value_set_enum (value, self->sort_type);
+            g_value_set_object (value, self->sort_data);
         }
         break;
 
@@ -86,7 +84,7 @@ constructed (GObject *object)
 
     G_OBJECT_CLASS (nautilus_view_model_parent_class)->constructed (object);
 
-    self->model = g_list_store_new (NAUTILUS_TYPE_VIEW_ITEM_MODEL);
+    self->internal_model = g_list_store_new (NAUTILUS_TYPE_VIEW_ITEM_MODEL);
 }
 
 static void
@@ -118,9 +116,9 @@ compare_data_func (gconstpointer a,
     file_b = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL ((gpointer) a));
 
     return nautilus_file_compare_for_sort (file_a, file_b,
-                                           self->sort_type,
-                                           self->reversed,
-                                           self->directories_first);
+                                           self->sort_data->sort_type,
+                                           self->sort_data->reversed,
+                                           self->sort_data->directories_first);
 }
 
 NautilusViewModel *
@@ -140,7 +138,7 @@ nautilus_view_model_set_sort_type (NautilusViewModel         *self,
 
     self->sort_data = g_new (NautilusViewModelSortData, 1);
     self->sort_data->sort_type = sort_data->sort_type;
-    self->sort_data->reverse = sort_data->reverse;
+    self->sort_data->reversed = sort_data->reversed;
     self->sort_data->directories_first = sort_data->directories_first;
 
     g_list_store_sort (self, compare_data_func, self);
