@@ -193,3 +193,16 @@ nautilus_view_icon_ui_new (NautilusViewIconController *controller)
                          NULL);
 }
 
+void
+nautilus_view_icon_ui_select_children (NautilusViewIconUi *self,
+                                       GQueue             *files)
+{
+    GList *l;
+    NautilusFile *file;
+
+    for (l = g_queue_peek_head_link (files); l != NULL; l = l->next)
+    {
+        file = NAUTILUS_FILE (l->data);
+        gtk_flow_box_select_child (l->data);
+    }
+}

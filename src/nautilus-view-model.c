@@ -113,12 +113,12 @@ compare_data_func (gconstpointer a,
     NautilusFile *file_b;
 
     file_a = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL ((gpointer) a));
-    file_b = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL ((gpointer) a));
+    file_b = nautilus_view_item_model_get_file (NAUTILUS_VIEW_ITEM_MODEL ((gpointer) b));
 
     return nautilus_file_compare_for_sort (file_a, file_b,
                                            self->sort_data->sort_type,
-                                           self->sort_data->reversed,
-                                           self->sort_data->directories_first);
+                                           self->sort_data->directories_first,
+                                           self->sort_data->reversed);
 }
 
 NautilusViewModel *
@@ -141,7 +141,7 @@ nautilus_view_model_set_sort_type (NautilusViewModel         *self,
     self->sort_data->reversed = sort_data->reversed;
     self->sort_data->directories_first = sort_data->directories_first;
 
-    g_list_store_sort (self, compare_data_func, self);
+    g_list_store_sort (self->internal_model, compare_data_func, self);
 }
 
 GListStore *

@@ -31,6 +31,9 @@ G_DECLARE_FINAL_TYPE (NautilusViewIconUi, nautilus_view_icon_ui, NAUTILUS, VIEW_
 
 NautilusViewIconUi * nautilus_view_icon_ui_new (NautilusViewIconController *controller);
 
+void nautilus_view_icon_ui_select_children (NautilusViewIconUi *self,
+                                            GQueue             *queue);
+
 G_END_DECLS
 
 #endif /* NAUTILUS_VIEW_ICON_UI_H */

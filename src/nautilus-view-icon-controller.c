@@ -4,6 +4,7 @@
 #include "nautilus-view-model.h"
 #include "nautilus-files-view.h"
 #include "nautilus-file.h"
+#include "nautilus-metadata.h"
 #include "nautilus-window-slot.h"
 #include "nautilus-directory.h"
 #include "nautilus-global-preferences.h"
@@ -22,21 +23,214 @@ struct _NautilusViewIconController
 
 G_DEFINE_TYPE (NautilusViewIconController, nautilus_view_icon_controller, NAUTILUS_TYPE_FILES_VIEW)
 
-static gint
-get_default_zoom_level ()
+typedef struct
 {
-    NautilusCanvasZoomLevel default_zoom_level;
+    const NautilusFileSortType sort_type;
+    const gchar *metadata_name;
+    const gchar *action_target_name;
+    gboolean reversed;
+} SortConstants;
 
-    default_zoom_level = g_settings_get_enum (nautilus_icon_view_preferences,
-                                              NAUTILUS_PREFERENCES_ICON_VIEW_DEFAULT_ZOOM_LEVEL);
+static const SortConstants sorts_constants[] =
+{
+    {
+        NAUTILUS_FILE_SORT_BY_DISPLAY_NAME,
+        "name",
+        "name",
+        FALSE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_DISPLAY_NAME,
+        "name",
+        "name-desc",
+        TRUE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_SIZE,
+        "size",
+        "size",
+        TRUE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_TYPE,
+        "type",
+        "type",
+        FALSE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_MTIME,
+        "modification date",
+        "modification-date",
+        FALSE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_MTIME,
+        "modification date",
+        "modification-date-desc",
+        TRUE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_ATIME,
+        "access date",
+        "access-date",
+        FALSE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_ATIME,
+        "access date",
+        "access-date-desc",
+        TRUE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_TRASHED_TIME,
+        "trashed",
+        "trash-time",
+        TRUE,
+    },
+    {
+        NAUTILUS_FILE_SORT_BY_SEARCH_RELEVANCE,
+        NULL,
+        "search-relevance",
+        TRUE,
+    }
+};
 
-    return default_zoom_level;
+static const SortConstants *
+get_sorts_constants_from_action_target_name (const gchar *action_target_name)
+{
+    int i;
+
+    for (i = 0; i < G_N_ELEMENTS (sorts_constants); i++)
+    {
+        if (g_strcmp0 (sorts_constants[i].action_target_name, action_target_name) == 0)
+        {
+             return &sorts_constants[i];
+        }
+    }
+
+    return &sorts_constants[0];
+}
+
+static const SortConstants *
+get_sorts_constants_from_sort_type (NautilusFileSortType sort_type,
+                                   gboolean             reversed)
+{
+    guint i;
+
+    for (i = 0; i < G_N_ELEMENTS (sorts_constants); i++)
+    {
+        if (sort_type == sorts_constants[i].sort_type
+            && reversed == sorts_constants[i].reversed)
+        {
+            return &sorts_constants[i];
+        }
+    }
+
+    return &sorts_constants[0];
+}
+
+static const SortConstants *
+get_sorts_constants_from_metadata_text (const char *metadata_name,
+                                       gboolean    reversed)
+{
+    guint i;
+
+    for (i = 0; i < G_N_ELEMENTS (sorts_constants); i++)
+    {
+        if (g_strcmp0 (sorts_constants[i].metadata_name, metadata_name) == 0
+            && reversed == sorts_constants[i].reversed)
+        {
+            return &sorts_constants[i];
+        }
+    }
+
+    return &sorts_constants[0];
+}
+
+static const SortConstants *
+get_default_sort_order (NautilusFile *file)
+{
+    NautilusFileSortType sort_type;
+    NautilusFileSortType default_sort_order;
+    gboolean reversed;
+
+    default_sort_order = g_settings_get_enum (nautilus_preferences,
+                                              NAUTILUS_PREFERENCES_DEFAULT_SORT_ORDER);
+    reversed = g_settings_get_boolean (nautilus_preferences,
+                                       NAUTILUS_PREFERENCES_DEFAULT_SORT_IN_REVERSE_ORDER);
+
+    /* If this is a special folder (e.g. search or recent), override the sort
+     * order and reversed flag with values appropriate for the folder */
+    sort_type = nautilus_file_get_default_sort_type (file, &reversed);
+
+    if (sort_type == NAUTILUS_FILE_SORT_NONE)
+    {
+        sort_type = CLAMP (default_sort_order,
+                           NAUTILUS_FILE_SORT_BY_DISPLAY_NAME,
+                           NAUTILUS_FILE_SORT_BY_ATIME);
+    }
+
+    return get_sorts_constants_from_sort_type (sort_type, reversed);
+}
+
+static const SortConstants *
+get_directory_sort_by (NautilusFile *file)
+{
+    const SortConstants *default_sort;
+    g_autofree char *sort_by = NULL;
+    gboolean reversed;
+
+    default_sort = get_default_sort_order (file);
+    g_return_val_if_fail (default_sort != NULL, NULL);
+
+    sort_by = nautilus_file_get_metadata (file,
+                                          NAUTILUS_METADATA_KEY_ICON_VIEW_SORT_BY,
+                                          default_sort->metadata_name);
+
+    reversed = nautilus_file_get_boolean_metadata (file,
+                                                   NAUTILUS_METADATA_KEY_ICON_VIEW_SORT_REVERSED,
+                                                   default_sort->reversed);
+
+    return get_sorts_constants_from_metadata_text (sort_by, reversed);
 }
 
 static void
-set_sort_order_from_metadata_and_preferences (NautilusViewIconController *self)
+set_directory_sort_metadata (NautilusFile        *file,
+                             const SortConstants *sort)
 {
+    const SortConstants *default_sort;
 
+    default_sort= get_default_sort_order (file);
+
+    nautilus_file_set_metadata (file,
+                                NAUTILUS_METADATA_KEY_ICON_VIEW_SORT_BY,
+                                default_sort->metadata_name,
+                                sort->metadata_name);
+    nautilus_file_set_boolean_metadata (file,
+                                        NAUTILUS_METADATA_KEY_ICON_VIEW_SORT_REVERSED,
+                                        default_sort->reversed,
+                                        sort->reversed);
+}
+
+static void
+update_sort_order_from_metadata_and_preferences (NautilusViewIconController *self)
+{
+    const SortConstants *default_directory_sort;
+    NautilusViewModelSortData sort_data;
+    GActionGroup *view_action_group;
+
+    default_directory_sort = get_directory_sort_by (nautilus_files_view_get_directory_as_file (NAUTILUS_FILES_VIEW (self)));
+    view_action_group = nautilus_files_view_get_action_group (NAUTILUS_FILES_VIEW (self));
+
+    sort_data.sort_type = default_directory_sort->sort_type;
+    sort_data.reversed = default_directory_sort->reversed;
+    sort_data.directories_first = nautilus_files_view_should_sort_directories_first (NAUTILUS_FILES_VIEW (self));
+
+    nautilus_view_model_set_sort_type (self->model, &sort_data);
+
+    g_action_group_change_action_state (view_action_group,
+                                        "sort",
+                                        g_variant_new_string (get_sorts_constants_from_sort_type (default_directory_sort->sort_type, default_directory_sort->reversed)->action_target_name));
 }
 
 static void
@@ -44,7 +238,16 @@ real_begin_loading (NautilusFilesView *files_view)
 {
     NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
 
-    set_sort_order_from_metadata_and_preferences (self);
+    // TODO: This calls sort once, and update_context_menus calls update_actions which calls
+    // the action again
+    update_sort_order_from_metadata_and_preferences (self);
+
+    //TODO move this to the files view class begin_loading and hook up?
+
+    /* We could have changed to the trash directory or to searching, and then
+     * we need to update the menus */
+    nautilus_files_view_update_context_menus (files_view);
+    nautilus_files_view_update_toolbar_menus (files_view);
 }
 
 static void
@@ -111,16 +314,44 @@ real_remove_file (NautilusFilesView *files_view,
     }
 }
 
+static GQueue *
+convert_glist_to_queue (GList *list)
+{
+    GList *l;
+    GQueue *queue;
+
+    queue = g_queue_new();
+    for (l = list; l != NULL; l = l->next)
+    {
+        g_queue_push_tail (queue, l->data);
+    }
+
+  return queue;
+}
+
 static void
 real_set_selection (NautilusFilesView *files_view,
-                    GList             *selection)
+                    GList             *selection_files)
 {
+    GQueue *selection_queue;
+    NautilusFile *file;
+
+    for (l = selection_files; l != NULL; l = l->next)
+    {
+        file = NAUTILUS_FILE (l->data);
+
+        gtk_flow_box_select_child (l->data);
+    }
+    nautilus_view_icon_ui_select_children (self->view_ui, selection_models);
     nautilus_files_view_notify_selection_changed (files_view);
+
+    g_queue_free (selection_queue);
 }
 
 static void
 real_select_all (NautilusFilesView *files_view)
 {
+    gtk_flow_box_select_all (GTK_FLOW_BOX (self->view_ui));
 }
 
 static void
@@ -128,10 +359,68 @@ real_reveal_selection (NautilusFilesView *files_view)
 {
 }
 
+static gboolean
+showing_recent_directory (NautilusFilesView *view)
+{
+    NautilusFile *file;
+
+    file = nautilus_files_view_get_directory_as_file (view);
+    if (file != NULL)
+    {
+        return nautilus_file_is_in_recent (file);
+    }
+    return FALSE;
+}
+
+static gboolean
+showing_search_directory (NautilusFilesView *view)
+{
+    NautilusFile *file;
+
+    file = nautilus_files_view_get_directory_as_file (view);
+    if (file != NULL)
+    {
+        return nautilus_file_is_in_search (file);
+    }
+    return FALSE;
+}
+
 static void
 real_update_actions_state (NautilusFilesView *files_view)
 {
+    GAction *action;
+    GActionGroup *view_action_group;
+
     NAUTILUS_FILES_VIEW_CLASS (nautilus_view_icon_controller_parent_class)->update_actions_state (files_view);
+
+    view_action_group = nautilus_files_view_get_action_group (files_view);
+
+    /* When we change the sort action state, even using the same value, it triggers
+     * the sort action changed handler, which reveals the selection, since we expect
+     * the selection to be visible when the user changes the sort order. But we may
+     * need to update the actions state for others reason than an actual sort change,
+     * so we need to prevent to trigger the sort action changed handler for those cases.
+     * To achieve this, check if the action state value actually changed before setting
+     * it
+     */
+#if 0
+    sort_state = g_action_group_get_action_state (view_action_group, "sort");
+
+    if (g_strcmp0 (g_variant_get_string (sort_state, NULL),
+                   NAUTILUS_CANVAS_VIEW (view)->details->sort->action_target_name) != 0)
+    {
+        g_action_group_change_action_state (view_action_group,
+                                            "sort",
+                                            g_variant_new_string (NAUTILUS_CANVAS_VIEW (view)->details->sort->action_target_name));
+    }
+
+    g_variant_unref (sort_state);
+
+#endif
+    action = g_action_map_lookup_action (G_ACTION_MAP (view_action_group), "sort");
+    g_simple_action_set_enabled (G_SIMPLE_ACTION (action),
+                                 !showing_recent_directory (files_view) &&
+                                 !showing_search_directory (files_view));
 }
 
 static void
@@ -182,6 +471,17 @@ get_icon_size_for_zoom_level (NautilusCanvasZoomLevel zoom_level)
         break;
     }
     g_return_val_if_reached (NAUTILUS_CANVAS_ICON_SIZE_STANDARD);
+}
+
+static gint
+get_default_zoom_level ()
+{
+    NautilusCanvasZoomLevel default_zoom_level;
+
+    default_zoom_level = g_settings_get_enum (nautilus_icon_view_preferences,
+                                              NAUTILUS_PREFERENCES_ICON_VIEW_DEFAULT_ZOOM_LEVEL);
+
+    return default_zoom_level;
 }
 
 static void
@@ -307,111 +607,33 @@ convert_file_glist_to_item_model_array (NautilusViewIconController *self,
     return array;
 }
 
-typedef struct
-{
-    const NautilusFileSortType sort_type;
-    const gchar *metadata_name;
-    const gchar *action_target_name;
-    gboolean reversed;
-} SortConstants;
-
-static const SortConstants sorts_constants[] =
-{
-    {
-        NAUTILUS_FILE_SORT_BY_DISPLAY_NAME,
-        "name",
-        "name",
-        FALSE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_DISPLAY_NAME,
-        "name",
-        "name-desc",
-        TRUE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_SIZE,
-        "size",
-        "size",
-        TRUE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_TYPE,
-        "type",
-        "type",
-        FALSE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_MTIME,
-        "modification date",
-        "modification-date",
-        FALSE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_MTIME,
-        "modification date",
-        "modification-date-desc",
-        TRUE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_ATIME,
-        "access date",
-        "access-date",
-        FALSE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_ATIME,
-        "access date",
-        "access-date-desc",
-        TRUE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_TRASHED_TIME,
-        "trashed",
-        "trash-time",
-        TRUE,
-    },
-    {
-        NAUTILUS_FILE_SORT_BY_SEARCH_RELEVANCE,
-        NULL,
-        "search-relevance",
-        TRUE,
-    }
-};
-
-static SortConstants *
-get_sort_constants_from_action_target_name (const gchar *action_target_name)
-{
-    int i;
-
-    for (i = 0; i < G_N_ELEMENTS (sorts_constants); i++)
-    {
-        if (g_strcmp0 (sorts_constants[i].action_target_name, action_target_name) == 0)
-        {
-             return &sorts_constants[i];
-        }
-    }
-
-    return &sorts_constants[0];
-}
 static void
 action_sort_order_changed (GSimpleAction *action,
                            GVariant      *value,
                            gpointer       user_data)
 {
     const gchar *target_name;
-    SortConstants *sort_constants;
+    const SortConstants *sorts_constants;
     NautilusViewModelSortData sort_data;
     NautilusViewIconController *self;
+    NautilusFile *file;
+
+    // Don't resort if the action is in the same state as before
+    if (g_strcmp0 (g_variant_get_string (value, NULL), g_variant_get_string (g_action_get_state (G_ACTION (action)), NULL)) == 0)
+    {
+        return;
+    }
 
     self = NAUTILUS_VIEW_ICON_CONTROLLER (user_data);
     target_name = g_variant_get_string (value, NULL);
-    sort_constants = get_sort_constants_from_action_target_name (target_name);
-    sort_data.sort_type = sort_constants->sort_type;
-    sort_data.reversed = sort_constants->reversed;
+    sorts_constants = get_sorts_constants_from_action_target_name (target_name);
+    sort_data.sort_type = sorts_constants->sort_type;
+    sort_data.reversed = sorts_constants->reversed;
     sort_data.directories_first = nautilus_files_view_should_sort_directories_first (NAUTILUS_FILES_VIEW (self));
 
     nautilus_view_model_set_sort_type (self->model, &sort_data);
+    set_directory_sort_metadata (nautilus_files_view_get_directory_as_file (NAUTILUS_FILES_VIEW (self)),
+                                 sorts_constants);
 
     g_simple_action_set_state (action, value);
 }
@@ -467,6 +689,7 @@ action_zoom_to_level (GSimpleAction *action,
 
     set_zoom_level (self, g_variant_get_int32 (state));
     g_simple_action_set_state (G_SIMPLE_ACTION (action), state);
+    g_print ("set action state\n");
 }
 
 static void
