@@ -331,26 +331,25 @@ convert_glist_to_queue (GList *list)
 
 static void
 real_set_selection (NautilusFilesView *files_view,
-                    GList             *selection_files)
+                    GList             *selection)
 {
-    GQueue *selection_queue;
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
+    g_autoptr (GQueue) selection_files;
+    g_autoptr (GQueue) selection_item_models;
     NautilusFile *file;
+    GList *l;
+    guint i = 0;
 
-    for (l = selection_files; l != NULL; l = l->next)
-    {
-        file = NAUTILUS_FILE (l->data);
-
-        gtk_flow_box_select_child (l->data);
-    }
-    nautilus_view_icon_ui_select_children (self->view_ui, selection_models);
+    selection_files = convert_glist_to_queue (selection);
+    selection_item_models = nautilus_view_model_get_item_models_from_files (self->model, selection_files);
+    nautilus_view_model_set_selected (self->model, selection_item_models);
     nautilus_files_view_notify_selection_changed (files_view);
-
-    g_queue_free (selection_queue);
 }
 
 static void
 real_select_all (NautilusFilesView *files_view)
 {
+    NautilusViewIconController *self = NAUTILUS_VIEW_ICON_CONTROLLER (files_view);
     gtk_flow_box_select_all (GTK_FLOW_BOX (self->view_ui));
 }
 
@@ -616,7 +615,6 @@ action_sort_order_changed (GSimpleAction *action,
     const SortConstants *sorts_constants;
     NautilusViewModelSortData sort_data;
     NautilusViewIconController *self;
-    NautilusFile *file;
 
     // Don't resort if the action is in the same state as before
     if (g_strcmp0 (g_variant_get_string (value, NULL), g_variant_get_string (g_action_get_state (G_ACTION (action)), NULL)) == 0)

@@ -97,15 +97,37 @@ set_property (GObject      *object,
     }
 }
 
+static void
+on_view_item_model_selected_changed (GObject    *object,
+                                     GParamSpec *pspec,
+                                     gpointer    user_data)
+{
+    NautilusViewIconItemUi *self = NAUTILUS_VIEW_ICON_ITEM_UI (user_data);
+    NautilusViewItemModel *item_model;
+    GtkFlowBoxChild *item_ui;
+
+    g_print ("selected changed\n", self->selected, !!selected);
+
+    item_model = NAUTILUS_VIEW_ITEM_MODEL (object);
+    item_ui = GTK_FLOW_BOX_CHILD (nautilus_view_item_model_get_item_ui (item_model));
+    gtk_flow_box_select_child (GTK_FLOW_BOX (self), item_ui);
+}
+
+
 static GtkWidget *
 create_widget_func (gpointer item,
                     gpointer user_data)
 {
+    NautilusViewIconUi *self = NAUTILUS_VIEW_ICON_UI (user_data);
     NautilusViewItemModel *item_model = NAUTILUS_VIEW_ITEM_MODEL (item);
     NautilusViewIconItemUi *child;
 
     child = nautilus_view_icon_item_ui_new (item_model);
+    nautilus_view_item_model_set_item_ui (item_model, child);
     gtk_widget_show (GTK_WIDGET (child));
+
+    g_signal_connect (item_model, "notify::selected",
+                      (GCallback) on_view_item_model_selected_changed, self);
 
     return GTK_WIDGET (child);
 }
@@ -193,16 +215,3 @@ nautilus_view_icon_ui_new (NautilusViewIconController *controller)
                          NULL);
 }
 
-void
-nautilus_view_icon_ui_select_children (NautilusViewIconUi *self,
-                                       GQueue             *files)
-{
-    GList *l;
-    NautilusFile *file;
-
-    for (l = g_queue_peek_head_link (files); l != NULL; l = l->next)
-    {
-        file = NAUTILUS_FILE (l->data);
-        gtk_flow_box_select_child (l->data);
-    }
-}

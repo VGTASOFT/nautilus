@@ -23,6 +23,10 @@ void nautilus_view_model_set_sort_type (NautilusViewModel         *self,
                                         NautilusViewModelSortData *sort_data);
 
 GListStore * nautilus_view_model_get_g_model (NautilusViewModel *self);
+GQueue * nautilus_view_model_get_item_models_from_files (NautilusViewModel *self,
+                                                         GQueue            *files);
+void nautilus_view_model_set_selected (NautilusViewModel *self,
+                                       GQueue            *item_models);
 
 G_END_DECLS
 

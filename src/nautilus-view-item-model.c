@@ -7,6 +7,8 @@ struct _NautilusViewItemModel
     guint icon_size;
     NautilusFile *file;
     GtkLabel *label;
+    gboolean selected;
+    GtkWidget *item_ui;
 };
 
 G_DEFINE_TYPE (NautilusViewItemModel, nautilus_view_item_model, G_TYPE_OBJECT)
@@ -16,6 +18,8 @@ enum
     PROP_0,
     PROP_FILE,
     PROP_ICON_SIZE,
+    PROP_SELECTED,
+    PROP_ITEM_UI,
     N_PROPS
 };
 
@@ -27,9 +31,9 @@ nautilus_view_item_model_finalize (GObject *object)
 
 static void
 nautilus_view_item_model_get_property (GObject    *object,
-                                      guint       prop_id,
-                                      GValue     *value,
-                                      GParamSpec *pspec)
+                                       guint       prop_id,
+                                       GValue     *value,
+                                       GParamSpec *pspec)
 {
     NautilusViewItemModel *self = NAUTILUS_VIEW_ITEM_MODEL (object);
 
@@ -44,6 +48,18 @@ nautilus_view_item_model_get_property (GObject    *object,
         case PROP_ICON_SIZE:
         {
             g_value_set_int (value, self->icon_size);
+        }
+        break;
+
+        case PROP_SELECTED:
+        {
+            g_value_set_boolean (value, self->selected);
+        }
+        break;
+
+        case PROP_ITEM_UI:
+        {
+            g_value_set_object (value, self->item_ui);
         }
         break;
 
@@ -73,6 +89,18 @@ nautilus_view_item_model_set_property (GObject      *object,
         case PROP_ICON_SIZE:
         {
             nautilus_view_item_model_set_icon_size (self, g_value_get_int (value));
+        }
+        break;
+
+        case PROP_SELECTED:
+        {
+            nautilus_view_item_model_set_selected (self, g_value_get_boolean (value));
+        }
+        break;
+
+        case PROP_ITEM_UI:
+        {
+            nautilus_view_item_model_set_item_ui (self, g_value_get_object (value));
         }
         break;
 
@@ -113,11 +141,26 @@ nautilus_view_item_model_class_init (NautilusViewItemModelClass *klass)
                                                           "The file the icon item represents",
                                                           NAUTILUS_TYPE_FILE,
                                                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+    g_object_class_install_property (object_class,
+                                     PROP_SELECTED,
+                                     g_param_spec_boolean ("selected",
+                                                           "Selected",
+                                                           "Sets the item as selected",
+                                                           FALSE,
+                                                           G_PARAM_READWRITE));
+
+    g_object_class_install_property (object_class,
+                                     PROP_ITEM_UI,
+                                     g_param_spec_object ("item-ui",
+                                                          "Item ui",
+                                                          "The UI that reprensents the item model",
+                                                          GTK_TYPE_WIDGET,
+                                                          G_PARAM_READWRITE));
 }
 
 NautilusViewItemModel *
 nautilus_view_item_model_new (NautilusFile *file,
-                             guint         icon_size)
+                              guint         icon_size)
 {
     return g_object_new (NAUTILUS_TYPE_VIEW_ITEM_MODEL,
                          "file", file,
@@ -162,4 +205,46 @@ nautilus_view_item_model_set_file (NautilusViewItemModel *self,
   self->file = g_object_ref (file);
 
   g_object_notify (G_OBJECT (self), "file");
+}
+
+gboolean
+nautilus_view_item_model_get_is_selected (NautilusViewItemModel *self)
+{
+    g_return_val_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self), NULL);
+
+    return self->selected;
+}
+
+void
+nautilus_view_item_model_set_selected (NautilusViewItemModel *self,
+                                       gboolean               selected)
+{
+    g_return_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self));
+
+    g_print ("item model set selected %d %d\n", self->selected, !!selected);
+    if (self->selected != !!selected)
+    {
+        self->selected = !!selected;
+        g_object_notify (G_OBJECT (self), "selected");
+    }
+}
+
+GtkWidget *
+nautilus_view_item_model_get_item_ui (NautilusViewItemModel *self)
+{
+    g_return_val_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self), NULL);
+
+    return self->item_ui;
+}
+
+void
+nautilus_view_item_model_set_item_ui (NautilusViewItemModel *self,
+                                      GtkWidget             *item_ui)
+{
+  g_return_if_fail (NAUTILUS_IS_VIEW_ITEM_MODEL (self));
+
+  g_clear_object (&self->item_ui);
+  self->item_ui = g_object_ref (item_ui);
+
+  g_object_notify (G_OBJECT (self), "item-ui");
 }

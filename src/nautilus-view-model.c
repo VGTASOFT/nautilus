@@ -149,3 +149,54 @@ nautilus_view_model_get_g_model (NautilusViewModel *self)
 {
     return self->internal_model;
 }
+
+GQueue *
+nautilus_view_model_get_item_models_from_files (NautilusViewModel *self,
+                                                GQueue            *files)
+{
+    GList *l;
+    gint *i;
+    NautilusViewItemModel *item_model;
+    GQueue *item_models;
+
+    item_models = g_queue_new ();
+    for (l = g_queue_peek_head_link (files); l != NULL; l = l->next)
+    {
+        NautilusFile *file1;
+
+        file1 = NAUTILUS_FILE (l->data);
+        while ((item_model = g_list_model_get_item (self->internal_model, i)))
+        {
+            NautilusFile *file2;
+            g_autofree gchar *file1_uri;
+            g_autofree gchar *file2_uri;
+
+            file2 = nautilus_view_item_model_get_file (item_model);
+            file1_uri = nautilus_file_get_uri (file1);
+            file2_uri = nautilus_file_get_uri (file2);
+            if (g_strcmp0 (file1_uri, file2_uri) == 0)
+            {
+                g_queue_push_tail (item_models, item_model);
+                break;
+            }
+        }
+    }
+
+    return item_models;
+}
+
+void
+nautilus_view_model_set_selected (NautilusViewModel *self,
+                                  GQueue            *item_models)
+{
+    GList *l;
+
+    g_print ("set selected\n");
+    for (l = g_queue_peek_head_link (item_models); l != NULL; l = l->next)
+    {
+        NautilusViewItemModel *item_model;
+
+        item_model = NAUTILUS_VIEW_ITEM_MODEL (l->data);
+        nautilus_view_item_model_set_selected (item_model, TRUE);
+    }
+}
